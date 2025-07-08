@@ -58,7 +58,7 @@ models = {
                               use_label_encoder=False, eval_metric='logloss', random_state=42),
     "LightGBM": LGBMClassifier(n_estimators=100, max_depth=7, learning_rate=0.1, random_state=42),
     "CatBoost": CatBoostClassifier(verbose=0, iterations=100, depth=7, learning_rate=0.1, random_state=42),
-    "MLP": MLPClassifier(hidden_layer_sizes=(128, 64), activation='relu', max_iter=500, random_state=42)
+     "MLP": MLPClassifier(hidden_layer_sizes=(100,), max_iter=50, early_stopping=True, random_state=42, verbose=True)
 }
 
 # === Step 5: Train & Evaluate Models ===
@@ -112,6 +112,17 @@ plt.grid(axis='y')
 plt.tight_layout()
 plt.savefig("enhanced_model_comparison.png")
 plt.show()
+
+# Confusion Matrix
+for name, result in results.items():
+    plt.figure(figsize=(5,4))
+    sns.heatmap(result['Confusion Matrix'], annot=True, fmt='d', cmap='Blues')
+    plt.title(f"{name} Confusion Matrix")
+    plt.xlabel("Predicted"); plt.ylabel("Actual")
+    plt.tight_layout()
+    plt.savefig(f"{name.lower().replace(' ', '_')}_confusion_matrix.png")
+    plt.close()
+
 
 # === Step 8: SHAP Explainability (XGBoost) ===
 print("\nComputing SHAP values (XGBoost)...")
