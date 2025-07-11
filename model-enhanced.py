@@ -22,6 +22,8 @@ from imblearn.over_sampling import SMOTE
 from lime.lime_tabular import LimeTabularExplainer
 import shap
 
+from sklearn.metrics.pairwise import cosine_similarity
+
 # === Step 1: Load Preprocessed Data ===
 print("Loading preprocessed log file...")
 df = pd.read_csv('preprocessed_hdfs_labeled.csv').dropna(subset=['Label'])
@@ -58,7 +60,7 @@ models = {
                               use_label_encoder=False, eval_metric='logloss', random_state=42),
     "LightGBM": LGBMClassifier(n_estimators=100, max_depth=7, learning_rate=0.1, random_state=42),
     "CatBoost": CatBoostClassifier(verbose=0, iterations=100, depth=7, learning_rate=0.1, random_state=42),
-     "MLP": MLPClassifier(hidden_layer_sizes=(100,), max_iter=50, early_stopping=True, random_state=42, verbose=True)
+     "MLP": MLPClassifier(hidden_layer_sizes=(75,), max_iter=50, early_stopping=True, random_state=42, verbose=True)
 }
 
 # === Step 5: Train & Evaluate Models ===
@@ -178,3 +180,49 @@ exp = lime_explainer.explain_instance(
 html_path = os.path.abspath("lime_instance_5.html")
 exp.save_to_file(html_path)
 webbrowser.open(f"file://{html_path}")
+
+print("\n=== Step 11: SHAP + LIME Explanation Agreement ===")
+
+# Step 11a: Extract SHAP values for 100 samples (already done)
+shap_features = X_test.iloc[:100]
+shap_vals_matrix = shap_values.values  # Already shape: (100, num_features)
+
+# Step 11b: Convert LIME results to a matrix
+lime_matrix = np.zeros_like(shap_vals_matrix)
+
+feature_names = X.columns.tolist()
+feature_index = {feat: i for i, feat in enumerate(feature_names)}
+
+for i, instance_expl in enumerate(lime_results):
+    for feat, val in instance_expl:
+        idx = feature_index.get(feat)
+        if idx is not None:
+            lime_matrix[i, idx] = val
+
+# Step 11c: Normalize both matrices for cosine similarity
+def normalize_rows(mat):
+    norms = np.linalg.norm(mat, axis=1, keepdims=True)
+    norms[norms == 0] = 1
+    return mat / norms
+
+shap_norm = normalize_rows(shap_vals_matrix)
+lime_norm = normalize_rows(lime_matrix)
+
+# Step 11d: Compute cosine similarity
+similarities = np.sum(shap_norm * lime_norm, axis=1)
+mean_agreement = np.mean(similarities)
+
+# Step 11e: Plot distribution
+plt.figure(figsize=(8, 5))
+sns.histplot(similarities, kde=True, bins=15, color="teal")
+plt.title("SHAP-LIME Agreement per Instance (Cosine Similarity)")
+plt.xlabel("Cosine Similarity")
+plt.ylabel("Frequency")
+plt.axvline(mean_agreement, color='red', linestyle='--', label=f"Mean = {mean_agreement:.2f}")
+plt.legend()
+plt.tight_layout()
+plt.savefig("shap_lime_agreement.png", dpi=300)
+plt.show()
+
+print(f"Average SHAP-LIME Cosine Similarity: {mean_agreement:.4f}")
+
