@@ -194,10 +194,12 @@ feature_names = X.columns.tolist()
 feature_index = {feat: i for i, feat in enumerate(feature_names)}
 
 for i, instance_expl in enumerate(lime_results):
-    for feat, val in instance_expl:
-        idx = feature_index.get(feat)
+    for feat_idx, val in exp.as_map()[1]:
+        raw_feat_name = lime_explainer.feature_names[feat_idx]
+        idx = feature_index.get(raw_feat_name)
         if idx is not None:
             lime_matrix[i, idx] = val
+
 
 # Step 11c: Normalize both matrices for cosine similarity
 def normalize_rows(mat):
@@ -212,6 +214,18 @@ lime_norm = normalize_rows(lime_matrix)
 similarities = np.sum(shap_norm * lime_norm, axis=1)
 mean_agreement = np.mean(similarities)
 
+# Top k features overlap
+topk = 10
+overlaps = []
+for i in range(100):
+    shap_top = np.argsort(shap_vals_matrix[i])[-topk:]
+    lime_top = np.argsort(lime_matrix[i])[-topk:]
+    intersection = len(set(shap_top).intersection(set(lime_top)))
+    overlaps.append(intersection / topk)  # Jaccard approximation
+
+mean_overlap = np.mean(overlaps)
+print(f"Top-{topk} Feature Agreement: {mean_overlap:.2f}")
+
 # Step 11e: Plot distribution
 plt.figure(figsize=(8, 5))
 sns.histplot(similarities, kde=True, bins=15, color="teal")
@@ -225,4 +239,14 @@ plt.savefig("shap_lime_agreement.png", dpi=300)
 plt.show()
 
 print(f"Average SHAP-LIME Cosine Similarity: {mean_agreement:.4f}")
+
+# Shap-Lime Heatmap
+plt.figure(figsize=(10, 6))
+sns.heatmap(np.corrcoef(shap_norm, lime_norm)[:100, 100:], cmap='coolwarm', center=0)
+plt.title("SHAP-LIME Correlation Heatmap (First 100 Samples)")
+plt.xlabel("LIME Instances")
+plt.ylabel("SHAP Instances")
+plt.tight_layout()
+plt.savefig("shap_lime_correlation_heatmap.png", dpi=300)
+plt.close()
 
